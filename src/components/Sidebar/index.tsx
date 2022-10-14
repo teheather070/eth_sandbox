@@ -135,7 +135,7 @@ const Tag = styled.p`
 // =============================================================================
 
 interface Props {
-  publicKey?: PublicKey;
+  address?: string;
   connectedMethods: ConnectedMethods[];
   connect: () => Promise<void>;
 }
@@ -145,7 +145,7 @@ interface Props {
 // =============================================================================
 
 const Sidebar = React.memo((props: Props) => {
-  const { publicKey, connectedMethods, connect } = props;
+  const { address, connectedMethods, connect } = props;
 
   return (
     <Main>
@@ -154,12 +154,12 @@ const Sidebar = React.memo((props: Props) => {
           <img src="https://phantom.app/img/phantom-logo.svg" alt="Phantom" width="200" />
           <Subtitle>CodeSandbox</Subtitle>
         </Link>
-        {publicKey ? (
+        {address ? (
           // connected
           <>
             <div>
               <Pre>Connected as</Pre>
-              <Badge>{publicKey.toBase58()}</Badge>
+              <Badge>{address}</Badge>
               <Divider />
             </div>
             {connectedMethods.map((method, i) => (

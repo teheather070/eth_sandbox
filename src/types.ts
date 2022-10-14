@@ -15,7 +15,7 @@ type PhantomRequestMethod =
 interface ConnectOpts {
   onlyIfTrusted: boolean;
 }
-
+// TODO: refactor this to eth instead of solana
 export interface PhantomProvider {
   publicKey: PublicKey | null;
   isConnected: boolean | null;

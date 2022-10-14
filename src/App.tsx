@@ -41,6 +41,7 @@ const StyledApp = styled.div`
 // alternatively, use 'https://solana-api.projectserum.com' for demo purposes only
 const NETWORK = clusterApiUrl('mainnet-beta');
 const provider = getProvider();
+let accounts = []
 const connection = new Connection(NETWORK);
 const message = 'To avoid digital dognappers, sign below to authenticate with CryptoCorgis.';
 
@@ -59,7 +60,7 @@ export type ConnectedMethods =
     };
 
 interface Props {
-  publicKey: PublicKey | null;
+  address: string | null;
   connectedMethods: ConnectedMethods[];
   handleConnect: () => Promise<void>;
   logs: TLog[];
@@ -89,18 +90,13 @@ const useProps = (): Props => {
   }, [setLogs]);
 
   useEffect(() => {
-    if (!provider) return;
+    if (!provider) return
 
-    // attempt to eagerly connect
-    provider.connect({ onlyIfTrusted: true }).catch(() => {
-      // fail silently
-    });
-
-    provider.on('connect', (publicKey: PublicKey) => {
+    provider.on('connect', (connectionInfo: {chainId: string}) => {
       createLog({
         status: 'success',
         method: 'connect',
-        message: `Connected to account ${publicKey.toBase58()}`,
+        message: `Connected to chain: ${connectionInfo.chainId}`,
       });
     });
 
@@ -112,12 +108,12 @@ const useProps = (): Props => {
       });
     });
 
-    provider.on('accountChanged', (publicKey: PublicKey | null) => {
-      if (publicKey) {
+    provider.on('accountChanged', (accounts: String[]) => {
+      if (accounts) {
         createLog({
           status: 'info',
           method: 'accountChanged',
-          message: `Switched to account ${publicKey.toBase58()}`,
+          message: `Switched to account ${accounts[0]}`,
         });
       } else {
         /**
@@ -141,7 +137,7 @@ const useProps = (): Props => {
           message: 'Attempting to switch accounts.',
         });
 
-        provider.connect().catch((error) => {
+        provider.request({method: 'eth_requestAccounts'}).catch((error) => {
           createLog({
             status: 'error',
             method: 'accountChanged',
@@ -152,7 +148,14 @@ const useProps = (): Props => {
     });
 
     return () => {
-      provider.disconnect();
+      provider.request({
+        method: "wallet_requestPermissions",
+        params: [
+          {
+            eth_accounts: {}
+          }
+        ]
+      })
     };
   }, [createLog]);
 
@@ -160,20 +163,26 @@ const useProps = (): Props => {
   const handleSignAndSendTransaction = useCallback(async () => {
     if (!provider) return;
 
+    const transactionParameters = {
+      nonce: '0x00', // ignored by Phantom
+      gasPrice: '0x09184e72a000', // customizable by user during MetaMask confirmation.
+      gas: '0x2710', // customizable by user during phantom confirmation.
+      to: provider.selectedAddress, // Required except during contract publications.
+      from: provider.selectedAddress, // must match user's active address.
+      value: '0x001', // Only required to send ether to the recipient from the initiating external account.
+      data:
+        '0x7f7465737432000000000000000000000000000000000000000000000000000000600057', // Optional, but used for defining smart contract creation and interaction.
+    };
     try {
-      const transaction = await createTransferTransaction(provider.publicKey, connection);
+      const transaction = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [transactionParameters],
+      })
       createLog({
         status: 'info',
         method: 'signAndSendTransaction',
         message: `Requesting signature for: ${JSON.stringify(transaction)}`,
       });
-      const signature = await signAndSendTransaction(provider, transaction);
-      createLog({
-        status: 'info',
-        method: 'signAndSendTransaction',
-        message: `Signed and submitted transaction ${signature}.`,
-      });
-      pollSignatureStatus(signature, connection, createLog);
     } catch (error) {
       createLog({
         status: 'error',
@@ -186,15 +195,27 @@ const useProps = (): Props => {
   /** SignTransaction */
   const handleSignTransaction = useCallback(async () => {
     if (!provider) return;
-
+    const transactionParameters = {
+      nonce: '0x00', // ignored by Phantom
+      gasPrice: '0x09184e72a000', // customizable by user during MetaMask confirmation.
+      gas: '0x2710', // customizable by user during MetaMask confirmation.
+      to: provider.selectedAddress, // Required except during contract publications.
+      from: provider.selectedAddress, // must match user's active address.
+      value: '0x00', // Only required to send ether to the recipient from the initiating external account.
+      data:
+        '0x7f7465737432000000000000000000000000000000000000000000000000000000600057', // Optional, but used for defining smart contract creation and interaction.
+      chainId: '0x1', // Used to prevent transaction reuse across blockchains. Auto-filled by MetaMask.
+    };
     try {
-      const transaction = await createTransferTransaction(provider.publicKey, connection);
       createLog({
         status: 'info',
         method: 'signTransaction',
-        message: `Requesting signature for: ${JSON.stringify(transaction)}`,
+        message: `Requesting signature for: ${JSON.stringify(transactionParameters)}`,
       });
-      const signedTransaction = await signTransaction(provider, transaction);
+      const signedTransaction = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [transactionParameters]
+      })
       createLog({
         status: 'success',
         method: 'signTransaction',
@@ -264,7 +285,12 @@ const useProps = (): Props => {
     if (!provider) return;
 
     try {
-      await provider.connect();
+      accounts = await provider.request({ method: 'eth_requestAccounts'});
+      createLog({
+        status: 'success',
+        method: 'connect',
+        message: `connected to account: ${accounts[0]}`,
+      });
     } catch (error) {
       createLog({
         status: 'error',
@@ -279,7 +305,15 @@ const useProps = (): Props => {
     if (!provider) return;
 
     try {
-      await provider.disconnect();
+      // this won't work currently, we need the exetension to be updated
+      await provider.request({
+        method: "wallet_requestPermissions",
+        params: [
+          {
+            eth_accounts: {}
+          }
+        ]
+      });
     } catch (error) {
       createLog({
         status: 'error',
@@ -321,7 +355,7 @@ const useProps = (): Props => {
   ]);
 
   return {
-    publicKey: provider?.publicKey || null,
+    address: accounts[0],
     connectedMethods,
     handleConnect,
     logs,
@@ -334,12 +368,12 @@ const useProps = (): Props => {
 // =============================================================================
 
 const StatelessApp = React.memo((props: Props) => {
-  const { publicKey, connectedMethods, handleConnect, logs, clearLogs } = props;
+  const { address, connectedMethods, handleConnect, logs, clearLogs } = props;
 
   return (
     <StyledApp>
-      <Sidebar publicKey={publicKey} connectedMethods={connectedMethods} connect={handleConnect} />
-      <Logs publicKey={publicKey} logs={logs} clearLogs={clearLogs} />
+      <Sidebar address={address} connectedMethods={connectedMethods} connect={handleConnect} />
+      <Logs address={address} logs={logs} clearLogs={clearLogs} />
     </StyledApp>
   );
 });

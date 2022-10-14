@@ -47,7 +47,7 @@ const Row = styled.div`
 // =============================================================================
 
 interface Props {
-  publicKey: PublicKey | null;
+  address: string | null;
   logs: TLog[];
   clearLogs: () => void;
 }
@@ -57,7 +57,7 @@ interface Props {
 // =============================================================================
 
 const Logs = React.memo((props: Props) => {
-  const { publicKey, logs, clearLogs } = props;
+  const { address, logs, clearLogs } = props;
 
   return (
     <StyledSection>
@@ -72,7 +72,7 @@ const Logs = React.memo((props: Props) => {
         <Row>
           <span>{'>'}</span>
           <PlaceholderMessage>
-            {publicKey ? (
+            {address ? (
               // connected
               <>
                 Click a button and watch magic happen...{' '}
