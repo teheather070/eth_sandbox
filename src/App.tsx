@@ -20,6 +20,7 @@ import {
 import { TLog } from './types';
 
 import { Logs, Sidebar, NoProvider } from './components';
+import { ethers } from 'ethers';
 
 // =============================================================================
 // Styled Components
@@ -137,7 +138,7 @@ const useProps = (): Props => {
           message: 'Attempting to switch accounts.',
         });
 
-        provider.request({method: 'eth_requestAccounts'}).catch((error) => {
+        provider.send('eth_requestAccounts', []).catch((error) => {
           createLog({
             status: 'error',
             method: 'accountChanged',
@@ -148,14 +149,14 @@ const useProps = (): Props => {
     });
 
     return () => {
-      provider.request({
-        method: "wallet_requestPermissions",
-        params: [
+      provider.send(
+        "wallet_requestPermissions",
+        [
           {
             eth_accounts: {}
           }
         ]
-      })
+      )
     };
   }, [createLog]);
 
@@ -163,21 +164,19 @@ const useProps = (): Props => {
   const handleSignAndSendTransaction = useCallback(async () => {
     if (!provider) return;
 
+    const signer = provider.getSigner()
+    const address = await signer.getAddress()
     const transactionParameters = {
-      nonce: '0x00', // ignored by Phantom
-      gasPrice: '0x09184e72a000', // customizable by user during MetaMask confirmation.
-      gas: '0x2710', // customizable by user during phantom confirmation.
-      to: provider.selectedAddress, // Required except during contract publications.
-      from: provider.selectedAddress, // must match user's active address.
-      value: '0x001', // Only required to send ether to the recipient from the initiating external account.
-      data:
-        '0x7f7465737432000000000000000000000000000000000000000000000000000000600057', // Optional, but used for defining smart contract creation and interaction.
+      nonce: await provider.getTransactionCount(address), // ignored by Phantom
+      gasPrice: await provider.getGasPrice(), // customizable by user during MetaMask confirmation.
+      gasLimit: ethers.utils.hexlify(10000),
+      to: address, // Required except during contract publications.
+      from: address, // must match user's active address.
+      value: ethers.utils.parseUnits("1", "wei"), // Only required to send ether to the recipient from the initiating external account.
+      data: "0x2208b07b3c285f9998749c90d270a61c63230983054b5cf1ddee97ea763d3b22"
     };
     try {
-      const transaction = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [transactionParameters],
-      })
+      const transaction = await signer.sendTransaction(transactionParameters) 
       createLog({
         status: 'info',
         method: 'signAndSendTransaction',
@@ -199,8 +198,8 @@ const useProps = (): Props => {
       nonce: '0x00', // ignored by Phantom
       gasPrice: '0x09184e72a000', // customizable by user during MetaMask confirmation.
       gas: '0x2710', // customizable by user during MetaMask confirmation.
-      to: provider.selectedAddress, // Required except during contract publications.
-      from: provider.selectedAddress, // must match user's active address.
+      to: provider._getAddress, // Required except during contract publications.
+      from: provider._getAddress, // must match user's active address.
       value: '0x00', // Only required to send ether to the recipient from the initiating external account.
       data:
         '0x7f7465737432000000000000000000000000000000000000000000000000000000600057', // Optional, but used for defining smart contract creation and interaction.
@@ -212,10 +211,10 @@ const useProps = (): Props => {
         method: 'signTransaction',
         message: `Requesting signature for: ${JSON.stringify(transactionParameters)}`,
       });
-      const signedTransaction = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [transactionParameters]
-      })
+      const signedTransaction = await provider.send(
+        'eth_sendTransaction',
+        [transactionParameters]
+      )
       createLog({
         status: 'success',
         method: 'signTransaction',
@@ -233,7 +232,7 @@ const useProps = (): Props => {
   /** SignAllTransactions */
   const handleSignAllTransactions = useCallback(async () => {
     if (!provider) return;
-
+/*
     try {
       const transactions = [
         await createTransferTransaction(provider.publicKey, connection),
@@ -257,20 +256,21 @@ const useProps = (): Props => {
         message: error.message,
       });
     }
+    */
   }, [createLog]);
 
   /** SignMessage */
   const handleSignMessage = useCallback(async () => {
     if (!provider) return;
-
     try {
-      const signedMessage = await signMessage(provider, message);
+      const signer = provider.getSigner()
+      const signature = await signer.signMessage(message)
       createLog({
         status: 'success',
         method: 'signMessage',
-        message: `Message signed: ${JSON.stringify(signedMessage)}`,
+        message: `Message signed: ${JSON.stringify(signature)}`,
       });
-      return signedMessage;
+      return signature;
     } catch (error) {
       createLog({
         status: 'error',
@@ -285,7 +285,7 @@ const useProps = (): Props => {
     if (!provider) return;
 
     try {
-      accounts = await provider.request({ method: 'eth_requestAccounts'});
+      accounts = await provider.send( 'eth_requestAccounts', []);
       createLog({
         status: 'success',
         method: 'connect',
@@ -306,14 +306,14 @@ const useProps = (): Props => {
 
     try {
       // this won't work currently, we need the exetension to be updated
-      await provider.request({
-        method: "wallet_requestPermissions",
-        params: [
+      await provider.send(
+        "wallet_requestPermissions",
+        [
           {
             eth_accounts: {}
           }
         ]
-      });
+      );
     } catch (error) {
       createLog({
         status: 'error',
