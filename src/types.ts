@@ -7,7 +7,7 @@ type PhantomEvent = 'connect' | 'disconnect' | 'accountChanged';
 type PhantomRequestMethod =
   | 'connect'
   | 'disconnect'
-  | 'signAndSendTransaction'
+  | 'eth_sendTransaction'
   | 'signTransaction'
   | 'signAllTransactions'
   | 'signMessage';

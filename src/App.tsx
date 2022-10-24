@@ -5,16 +5,10 @@
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import styled from 'styled-components';
-import { clusterApiUrl, Connection, PublicKey } from '@solana/web3.js';
+import { clusterApiUrl, Connection } from '@solana/web3.js';
 
 import {
   getProvider,
-  signAllTransactions,
-  signAndSendTransaction,
-  signMessage,
-  signTransaction,
-  createTransferTransaction,
-  pollSignatureStatus,
 } from './utils';
 
 import { TLog } from './types';
@@ -42,6 +36,8 @@ const StyledApp = styled.div`
 // alternatively, use 'https://solana-api.projectserum.com' for demo purposes only
 const NETWORK = clusterApiUrl('mainnet-beta');
 const provider = getProvider();
+const anyWindow: any = window;
+const ethereum = anyWindow.ethereum
 let accounts = []
 const connection = new Connection(NETWORK);
 const message = 'To avoid digital dognappers, sign below to authenticate with CryptoCorgis.';
@@ -93,7 +89,7 @@ const useProps = (): Props => {
   useEffect(() => {
     if (!provider) return
 
-    provider.on('connect', (connectionInfo: {chainId: string}) => {
+    ethereum.on('connect', (connectionInfo: {chainId: string}) => {
       createLog({
         status: 'success',
         method: 'connect',
@@ -101,16 +97,17 @@ const useProps = (): Props => {
       });
     });
 
-    provider.on('disconnect', () => {
+    ethereum.on('disconnect', () => {
       createLog({
         status: 'warning',
         method: 'disconnect',
-        message: '👋',
+        message: 'lost connection to the rpc',
       });
     });
 
-    provider.on('accountChanged', (accounts: String[]) => {
-      if (accounts) {
+    ethereum.on('accountsChanged', (newAccounts: String[]) => {
+      if (newAccounts) {
+        accounts = newAccounts
         createLog({
           status: 'info',
           method: 'accountChanged',
@@ -124,7 +121,7 @@ const useProps = (): Props => {
          * 2. Only re-connect to the new account if it is trusted
          *
          * ```
-         * provider.connect({ onlyIfTrusted: true }).catch((err) => {
+         * provider.send('eth_requestAccounts', []).catch((err) => {
          *  // fail silently
          * });
          * ```
@@ -148,115 +145,52 @@ const useProps = (): Props => {
       }
     });
 
-    return () => {
-      provider.send(
-        "wallet_requestPermissions",
-        [
-          {
-            eth_accounts: {}
-          }
-        ]
-      )
-    };
   }, [createLog]);
 
-  /** SignAndSendTransaction */
-  const handleSignAndSendTransaction = useCallback(async () => {
+  /** eth_sendTransaction */
+  const handleEthSendTransaction = useCallback(async () => {
     if (!provider) return;
 
     const signer = provider.getSigner()
     const address = await signer.getAddress()
+    const gasPrice = await provider.getGasPrice()
     const transactionParameters = {
       nonce: await provider.getTransactionCount(address), // ignored by Phantom
-      gasPrice: await provider.getGasPrice(), // customizable by user during MetaMask confirmation.
-      gasLimit: ethers.utils.hexlify(10000),
+      gasPrice, // customizable by user during MetaMask confirmation.
+      gasLimit: ethers.utils.hexlify(100000),
       to: address, // Required except during contract publications.
       from: address, // must match user's active address.
       value: ethers.utils.parseUnits("1", "wei"), // Only required to send ether to the recipient from the initiating external account.
-      data: "0x2208b07b3c285f9998749c90d270a61c63230983054b5cf1ddee97ea763d3b22"
+      data: "0x2208b07b3c285f9998749c90d270a61c63230983054b5cf1ddee97ea763d3b22" // optional arbitrary hex data
     };
     try {
       const transaction = await signer.sendTransaction(transactionParameters) 
       createLog({
         status: 'info',
-        method: 'signAndSendTransaction',
-        message: `Requesting signature for: ${JSON.stringify(transaction)}`,
+        method: 'eth_sendTransaction',
+        message: `Sending transaction: ${JSON.stringify(transaction)}`,
       });
+      try {
+        const txReceipt =  await transaction.wait(1)
+        createLog({
+          status: 'info',
+          method: 'eth_sendTransaction',
+          message: `TX included: ${JSON.stringify(txReceipt)}`,
+        });
+      } catch (error) {
+        createLog({
+          status: 'error',
+          method: 'eth_sendTransaction',
+          message: `Failed to include transaction on the chain: ${error.message}`
+        });
+      }
     } catch (error) {
       createLog({
         status: 'error',
-        method: 'signAndSendTransaction',
-        message: error.message,
+        method: 'eth_sendTransaction',
+        message: error.message
       });
     }
-  }, [createLog]);
-
-  /** SignTransaction */
-  const handleSignTransaction = useCallback(async () => {
-    if (!provider) return;
-    const transactionParameters = {
-      nonce: '0x00', // ignored by Phantom
-      gasPrice: '0x09184e72a000', // customizable by user during MetaMask confirmation.
-      gas: '0x2710', // customizable by user during MetaMask confirmation.
-      to: provider._getAddress, // Required except during contract publications.
-      from: provider._getAddress, // must match user's active address.
-      value: '0x00', // Only required to send ether to the recipient from the initiating external account.
-      data:
-        '0x7f7465737432000000000000000000000000000000000000000000000000000000600057', // Optional, but used for defining smart contract creation and interaction.
-      chainId: '0x1', // Used to prevent transaction reuse across blockchains. Auto-filled by MetaMask.
-    };
-    try {
-      createLog({
-        status: 'info',
-        method: 'signTransaction',
-        message: `Requesting signature for: ${JSON.stringify(transactionParameters)}`,
-      });
-      const signedTransaction = await provider.send(
-        'eth_sendTransaction',
-        [transactionParameters]
-      )
-      createLog({
-        status: 'success',
-        method: 'signTransaction',
-        message: `Transaction signed: ${JSON.stringify(signedTransaction)}`,
-      });
-    } catch (error) {
-      createLog({
-        status: 'error',
-        method: 'signTransaction',
-        message: error.message,
-      });
-    }
-  }, [createLog]);
-
-  /** SignAllTransactions */
-  const handleSignAllTransactions = useCallback(async () => {
-    if (!provider) return;
-/*
-    try {
-      const transactions = [
-        await createTransferTransaction(provider.publicKey, connection),
-        await createTransferTransaction(provider.publicKey, connection),
-      ];
-      createLog({
-        status: 'info',
-        method: 'signAllTransactions',
-        message: `Requesting signature for: ${JSON.stringify(transactions)}`,
-      });
-      const signedTransactions = await signAllTransactions(provider, transactions[0], transactions[1]);
-      createLog({
-        status: 'success',
-        method: 'signAllTransactions',
-        message: `Transactions signed: ${JSON.stringify(signedTransactions)}`,
-      });
-    } catch (error) {
-      createLog({
-        status: 'error',
-        method: 'signAllTransactions',
-        message: error.message,
-      });
-    }
-    */
   }, [createLog]);
 
   /** SignMessage */
@@ -300,58 +234,20 @@ const useProps = (): Props => {
     }
   }, [createLog]);
 
-  /** Disconnect */
-  const handleDisconnect = useCallback(async () => {
-    if (!provider) return;
-
-    try {
-      // this won't work currently, we need the exetension to be updated
-      await provider.send(
-        "wallet_requestPermissions",
-        [
-          {
-            eth_accounts: {}
-          }
-        ]
-      );
-    } catch (error) {
-      createLog({
-        status: 'error',
-        method: 'disconnect',
-        message: error.message,
-      });
-    }
-  }, [createLog]);
-
   const connectedMethods = useMemo(() => {
     return [
       {
-        name: 'Sign and Send Transaction',
-        onClick: handleSignAndSendTransaction,
-      },
-      {
-        name: 'Sign Transaction',
-        onClick: handleSignTransaction,
-      },
-      {
-        name: 'Sign All Transactions',
-        onClick: handleSignAllTransactions,
+        name: 'Send Transaction',
+        onClick: handleEthSendTransaction,
       },
       {
         name: 'Sign Message',
         onClick: handleSignMessage,
       },
-      {
-        name: 'Disconnect',
-        onClick: handleDisconnect,
-      },
     ];
   }, [
-    handleSignAndSendTransaction,
-    handleSignTransaction,
-    handleSignAllTransactions,
+    handleEthSendTransaction,
     handleSignMessage,
-    handleDisconnect,
   ]);
 
   return {

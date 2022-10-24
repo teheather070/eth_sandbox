@@ -1,5 +1,4 @@
 import React from 'react';
-import { PublicKey } from '@solana/web3.js';
 import styled from 'styled-components';
 
 import { GRAY, REACT_GRAY, PURPLE, WHITE, DARK_GRAY } from '../../constants';
