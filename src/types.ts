@@ -1,4 +1,5 @@
 import { PublicKey, Transaction, SendOptions } from '@solana/web3.js';
+import { providers } from 'ethers';
 
 type DisplayEncoding = 'utf8' | 'hex';
 
@@ -40,3 +41,5 @@ export interface TLog {
   message: string;
   messageTwo?: string;
 }
+
+export type Web3Provider = providers.Web3Provider;
