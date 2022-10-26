@@ -16,7 +16,6 @@
   ],
   "main": "src/index.tsx",
   "dependencies": {
-    "@solana/web3.js": "^1.47.1",
     "ethers": "^5.7.2"
   },
   "devDependencies": {
