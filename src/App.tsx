@@ -6,9 +6,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import styled from 'styled-components';
 
-// TODO: Remove @solana/web3.js package?
-// import { clusterApiUrl, Connection } from '@solana/web3.js';
-
 import { getProvider } from './utils';
 
 import { TLog, Web3Provider } from './types';
@@ -33,7 +30,8 @@ const StyledApp = styled.div`
 // Constants
 // =============================================================================
 
-// const provider = getProvider();
+const anyWindow: any = window;
+const ethereum = anyWindow.ethereum;
 let accounts = [];
 const message = 'To avoid digital dognappers, sign below to authenticate with CryptoCorgis.';
 const sleep = (timeInMS) => new Promise((resolve) => setTimeout(resolve, timeInMS));
@@ -56,7 +54,7 @@ interface Props {
   address: string | null;
   connectedMethods: ConnectedMethods[];
   handleConnect: () => Promise<void>;
-  provider: any;
+  provider: Web3Provider;
   logs: TLog[];
   clearLogs: () => void;
 }
@@ -94,7 +92,7 @@ const useProps = (): Props => {
   useEffect(() => {
     if (!provider) return;
 
-    provider.on('connect', (connectionInfo: { chainId: string }) => {
+    ethereum.on('connect', (connectionInfo: { chainId: string }) => {
       createLog({
         status: 'success',
         method: 'connect',
@@ -102,7 +100,7 @@ const useProps = (): Props => {
       });
     });
 
-    provider.on('disconnect', () => {
+    ethereum.on('disconnect', () => {
       createLog({
         status: 'warning',
         method: 'disconnect',
@@ -110,14 +108,14 @@ const useProps = (): Props => {
       });
     });
 
-    provider.on('accountsChanged', (newAccounts: String[]) => {
+    ethereum.on('accountsChanged', (newAccounts: String[]) => {
       if (newAccounts) {
-        accounts = newAccounts;
         createLog({
           status: 'info',
           method: 'accountChanged',
-          message: `Switched to account ${accounts[0]}`,
+          message: `Switched to account: ${newAccounts}`,
         });
+        accounts = newAccounts;
       } else {
         /**
          * In this case dApps could...
@@ -160,7 +158,7 @@ const useProps = (): Props => {
     const gasPrice = await provider.getGasPrice();
     const transactionParameters = {
       nonce: await provider.getTransactionCount(address), // ignored by Phantom
-      gasPrice, // customizable by user during MetaMask confirmation.
+      gasPrice, // customizable by user during confirmation.
       gasLimit: ethers.utils.hexlify(100000),
       to: address, // Required except during contract publications.
       from: address, // must match user's active address.
@@ -168,6 +166,7 @@ const useProps = (): Props => {
       data: '0x2208b07b3c285f9998749c90d270a61c63230983054b5cf1ddee97ea763d3b22', // optional arbitrary hex data
     };
     try {
+      // send the transaction up to the network
       const transaction = await signer.sendTransaction(transactionParameters);
       createLog({
         status: 'info',
@@ -175,13 +174,15 @@ const useProps = (): Props => {
         message: `Sending transaction: ${JSON.stringify(transaction)}`,
       });
       try {
-        const txReceipt = await transaction.wait(1);
+        // wait for the transaction to be included in the next block
+        const txReceipt = await transaction.wait(1); // 1 is number of blocks to be confirmed before returning the receipt
         createLog({
           status: 'info',
           method: 'eth_sendTransaction',
           message: `TX included: ${JSON.stringify(txReceipt)}`,
         });
       } catch (error) {
+        // log out if the tx didn't get included for some reason
         createLog({
           status: 'error',
           method: 'eth_sendTransaction',
@@ -236,7 +237,7 @@ const useProps = (): Props => {
         message: error.message,
       });
     }
-  }, [provider, createLog]);
+  }, [provider, createLog, accounts]);
 
   const connectedMethods = useMemo(() => {
     return [
@@ -247,6 +248,10 @@ const useProps = (): Props => {
       {
         name: 'Sign Message',
         onClick: handleSignMessage,
+      },
+      {
+        name: 'Reconnect',
+        onClick: handleConnect,
       },
     ];
   }, [handleEthSendTransaction, handleSignMessage]);

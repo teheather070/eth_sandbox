@@ -1,6 +1,5 @@
 import React from 'react';
 import styled from 'styled-components';
-import { PublicKey } from '@solana/web3.js';
 
 import { TLog } from '../../types';
 
