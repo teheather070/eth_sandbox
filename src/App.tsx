@@ -6,12 +6,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import styled from 'styled-components';
 
-import { getProvider } from './utils';
+import { getProvider, sendTransaction } from './utils';
 
 import { TLog, Web3Provider } from './types';
 
 import { Logs, Sidebar, NoProvider } from './components';
-import { ethers } from 'ethers';
 
 // =============================================================================
 // Styled Components
@@ -30,8 +29,11 @@ const StyledApp = styled.div`
 // Constants
 // =============================================================================
 
-const anyWindow: any = window;
-const ethereum = anyWindow.ethereum;
+declare global {
+  interface Window {
+    ethereum: any
+  }
+}
 let accounts = [];
 const message = 'To avoid digital dognappers, sign below to authenticate with CryptoCorgis.';
 const sleep = (timeInMS) => new Promise((resolve) => setTimeout(resolve, timeInMS));
@@ -84,6 +86,7 @@ const useProps = (): Props => {
 
   useEffect(() => {
     (async () => {
+      // sleep for 100 ms to give time to inject
       await sleep(100);
       setProvider(getProvider());
     })();
@@ -92,7 +95,7 @@ const useProps = (): Props => {
   useEffect(() => {
     if (!provider) return;
 
-    ethereum.on('connect', (connectionInfo: { chainId: string }) => {
+    window.ethereum.on('connect', (connectionInfo: { chainId: string }) => {
       createLog({
         status: 'success',
         method: 'connect',
@@ -100,7 +103,7 @@ const useProps = (): Props => {
       });
     });
 
-    ethereum.on('disconnect', () => {
+    window.ethereum.on('disconnect', () => {
       createLog({
         status: 'warning',
         method: 'disconnect',
@@ -108,7 +111,7 @@ const useProps = (): Props => {
       });
     });
 
-    ethereum.on('accountsChanged', (newAccounts: String[]) => {
+    window.ethereum.on('accountsChanged', (newAccounts: String[]) => {
       if (newAccounts) {
         createLog({
           status: 'info',
@@ -153,21 +156,9 @@ const useProps = (): Props => {
   const handleEthSendTransaction = useCallback(async () => {
     if (!provider) return;
 
-    const signer = provider.getSigner();
-    const address = await signer.getAddress();
-    const gasPrice = await provider.getGasPrice();
-    const transactionParameters = {
-      nonce: await provider.getTransactionCount(address), // ignored by Phantom
-      gasPrice, // customizable by user during confirmation.
-      gasLimit: ethers.utils.hexlify(100000),
-      to: address, // Required except during contract publications.
-      from: address, // must match user's active address.
-      value: ethers.utils.parseUnits('1', 'wei'), // Only required to send ether to the recipient from the initiating external account.
-      data: '0x2208b07b3c285f9998749c90d270a61c63230983054b5cf1ddee97ea763d3b22', // optional arbitrary hex data
-    };
     try {
       // send the transaction up to the network
-      const transaction = await signer.sendTransaction(transactionParameters);
+      const transaction = await sendTransaction(provider);
       createLog({
         status: 'info',
         method: 'eth_sendTransaction',
@@ -177,7 +168,7 @@ const useProps = (): Props => {
         // wait for the transaction to be included in the next block
         const txReceipt = await transaction.wait(1); // 1 is number of blocks to be confirmed before returning the receipt
         createLog({
-          status: 'info',
+          status: 'success',
           method: 'eth_sendTransaction',
           message: `TX included: ${JSON.stringify(txReceipt)}`,
         });
