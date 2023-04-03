@@ -5,6 +5,8 @@
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import styled from 'styled-components';
+import { ethers } from 'ethers'
+import { getListingHash } from './utils/hash';
 
 import { getProvider, sendTransaction } from './utils';
 
@@ -35,7 +37,48 @@ declare global {
   }
 }
 let accounts = [];
-const message = 'To avoid digital dognappers, sign below to authenticate with CryptoCorgis.';
+const OBJECT = {
+  "listingAssets": {
+      "tokens": [
+          "0x0C0D1E9f35CB9FA05eCb96d35d127Fb0F65a4572"
+      ],
+      "tokenIds": [
+          "33"
+      ],
+      "paymentTokens": [
+          "0x5bDaC4aCdCff26CC27a03C6bcCa81cE4FDB1fEE9"
+      ],
+      "amounts": [
+          "100000000000000000000"
+      ]
+  },
+  "directSwaps": [
+      {
+          "tokens": [
+              "0x0C0D1E9f35CB9FA05eCb96d35d127Fb0F65a4572"
+          ],
+          "roots": [
+              "0xa03837a25210ee280c2113ff4b77ca23440b19d4866cca721c801278fd08d807"
+          ],
+          "paymentTokens": [],
+          "amounts": []
+      }
+  ],
+  "reserves": [],
+  "royalty": {
+      "to": [],
+      "percentage": []
+  },
+  "tradeIntendedFor": "0x286066E3849c361f3B7029C545e0586cafc3127e",
+  "timePeriod": 1680708904,
+  "owner": "0xA3DD166E03f63280340CA4Ac2E4fCeB7A2a686f1",
+  "nonce": 23
+}
+
+const hashedOBJ = getListingHash(OBJECT)
+const hexed = ethers.utils.hexlify(hashedOBJ)
+const arr = ethers.utils.arrayify(hexed)
+const message = arr
 const sleep = (timeInMS) => new Promise((resolve) => setTimeout(resolve, timeInMS));
 
 // =============================================================================
